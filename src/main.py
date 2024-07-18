@@ -13,6 +13,8 @@ import cv2
 import numpy as np
 import mediapipe as mp
 from pymongo import MongoClient
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 
 # Load environment variables
 load_dotenv()
@@ -33,6 +35,7 @@ collection = db["profile"]
 # JWT secret and algorithm
 JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
 
 app = FastAPI()
 
@@ -64,7 +67,7 @@ class Profile(BaseModel):
     weight_unit: str
 
 class User(BaseModel):
-    email: EmailStr
+    id_token: str
 
 def create_access_token(email: str):
     expire = datetime.utcnow() + timedelta(days=30)
@@ -84,12 +87,18 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 @app.post("/login")
 async def login(user: User):
-    existing_user = db["users"].find_one({"email": user.email})
+    try:
+        idinfo = google_id_token.verify_oauth2_token(user.id_token, google_requests.Request(), GOOGLE_CLIENT_ID)
+        email = idinfo['email']
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    existing_user = db["users"].find_one({"email": email})
     if not existing_user:
         # Create a new user if it doesn't exist
-        db["users"].insert_one({"email": user.email})
+        db["users"].insert_one({"email": email})
     
-    access_token = create_access_token(email=user.email)
+    access_token = create_access_token(email=email)
     response = JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
     response.set_cookie(key="access_token", value=access_token, httponly=True)
     return response
