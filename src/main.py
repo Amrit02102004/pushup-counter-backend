@@ -1,25 +1,24 @@
 import os
-import jwt
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from typing import List, Dict, Optional
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+from dotenv import load_dotenv
 import pymongo
-from exercise import Exercise
+import firebase_admin
+from firebase_admin import credentials, auth
 import cv2
 import numpy as np
 import mediapipe as mp
-from pymongo import MongoClient
-from google.auth.transport import requests as google_requests
-from google.oauth2 import id_token as google_id_token
 
 # Load environment variables
 load_dotenv()
 
 # Initialize the exercise class
+from exercise import Exercise
 exercise = Exercise()
 
 # Initialize Mediapipe Pose model
@@ -32,10 +31,20 @@ client = pymongo.MongoClient(mongo_uri)
 db = client["pushup_counter"]
 collection = db["profile"]
 
-# JWT secret and algorithm
-JWT_SECRET = os.getenv("JWT_SECRET")
-JWT_ALGORITHM = "HS256"
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+# Initialize Firebase Admin SDK
+firebase_credentials = credentials.Certificate({
+    "type": "service_account",
+    "project_id": os.getenv("FIREBASE_PROJECT_ID"),
+    "private_key_id": os.getenv("FIREBASE_PRIVATE_KEY_ID"),
+    "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace("\\n", "\n"),
+    "client_email": os.getenv("FIREBASE_CLIENT_EMAIL"),
+    "client_id": os.getenv("FIREBASE_CLIENT_ID"),
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
+})
+firebase_admin.initialize_app(firebase_credentials)
 
 app = FastAPI()
 
@@ -51,9 +60,9 @@ app.add_middleware(
 # OAuth2PasswordBearer instance
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
-# Define the data model for the response
+# Pydantic models
 class PoseLandmarks(BaseModel):
-    landmarks: list[dict]
+    landmarks: List[Dict]
     feedback: str
     count: int
     image: str  # Hex string of the image
@@ -66,42 +75,65 @@ class Profile(BaseModel):
     weight: int
     weight_unit: str
 
-class User(BaseModel):
+class LoginRequest(BaseModel):
     id_token: str
 
-def create_access_token(email: str):
-    expire = datetime.utcnow() + timedelta(days=30)
-    to_encode = {"exp": expire, "sub": email}
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
+class FirebaseMetadata(BaseModel):
+    sign_in_provider: Optional[str] = None
+    identities: Optional[Dict[str, List]] = None
+
+class User(BaseModel):
+    userid: str
+    email: str
+    username: str = Field(default="No username provided")
+    profile_photo: str = Field(default="No profile photo")
+    last_login: datetime = Field(default_factory=datetime.now)
+    firebase_metadata: FirebaseMetadata = Field(default_factory=FirebaseMetadata)
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        email: str = payload.get("sub")
+        # Verify the Firebase ID token
+        decoded_token = auth.verify_id_token(token)
+        email = decoded_token.get('email')
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         return email
-    except jwt.PyJWTError:
+    except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
 
 @app.post("/login")
-async def login(user: User):
+async def login(login_request: LoginRequest):
     try:
-        idinfo = google_id_token.verify_oauth2_token(user.id_token, google_requests.Request(), GOOGLE_CLIENT_ID)
-        email = idinfo['email']
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        # Verify the Firebase ID token
+        decoded_token = auth.verify_id_token(login_request.id_token)
+        
+        # Create User instance with data from decoded token
+        user = User(
+            userid=decoded_token['uid'],
+            email=decoded_token.get('email', 'No email provided'),
+            username=decoded_token.get('name', 'No username provided'),
+            profile_photo=decoded_token.get('picture', 'No profile photo'),
+            firebase_metadata=FirebaseMetadata(
+                sign_in_provider=decoded_token.get('firebase', {}).get('sign_in_provider'),
+                identities=decoded_token.get('firebase', {}).get('identities')
+            )
+        )
+        
+        # Update or insert user data in MongoDB
+        db.users.update_one(
+            {"userid": user.userid},
+            {"$set": user.dict(by_alias=True)},
+            upsert=True
+        )
+        
+        return {"message": "Login successful", "userid": user.userid, "email": user.email}
 
-    existing_user = db["users"].find_one({"email": email})
-    if not existing_user:
-        # Create a new user if it doesn't exist
-        db["users"].insert_one({"email": email})
-    
-    access_token = create_access_token(email=email)
-    response = JSONResponse(content={"access_token": access_token, "token_type": "bearer"})
-    response.set_cookie(key="access_token", value=access_token, httponly=True)
-    return response
+    except auth.InvalidIdTokenError as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+    except ValueError as ve:
+        raise HTTPException(status_code=401, detail=f"Invalid token error: {ve}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error during login: {str(e)}")
 
 @app.post("/profile-set")
 async def profile_set(profile: Profile, email: str = Depends(get_current_user)):
