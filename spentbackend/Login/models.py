@@ -12,3 +12,14 @@ class User(models.Model):
 
     def __str__(self):
         return self.email
+class UserProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    gender = models.CharField(max_length=10)
+    dob = models.DateField()
+    height_feet = models.IntegerField()
+    height_inches = models.IntegerField()
+    weight = models.FloatField()
+    weight_unit = models.CharField(max_length=10)
+
+    def __str__(self):
+        return self.user.email
