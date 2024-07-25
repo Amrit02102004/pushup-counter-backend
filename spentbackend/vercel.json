@@ -6,14 +6,15 @@
         "use": "@vercel/python",
         "config": {
           "maxLambdaSize": "50mb",
-          "installCommand": "pip install -r requirements.txt",
-          "startCommand": "python manage.py runserver 0.0.0.0:8000"
+          "runtime": "python3.9"
         }
+      },
+      {
+        "src": "build_files.sh",
+        "use": "@vercel/static-build"        
       }
     ],
     "routes": [
-      { "src": "/static/(.*)", "dest": "/spentbackend/static/$1" },
-      { "src": "/media/(.*)", "dest": "/spentbackend/media/$1" },
       { "src": "/(.*)", "dest": "spentbackend/wsgi.py" }
     ]
   }
