@@ -14,7 +14,7 @@
     "routes": [
       { "src": "/static/(.*)", "dest": "/spentbackend/static/$1" },
       { "src": "/media/(.*)", "dest": "/spentbackend/media/$1" },
-      { "src": "/(.*)", "dest": "/spentbackend/wsgi.py" }
+      { "src": "/(.*)", "dest": "/spentbackend/spentbackend/wsgi.py" }
     ]
   }
   
