@@ -22,9 +22,6 @@ RUN pip install --upgrade pip \
 # Copy the entire Django project
 COPY spentbackend/ /app/
 
-# Collect static files
-RUN python manage.py collectstatic --noinput
-
 # Run migrations
 RUN python manage.py migrate
 
