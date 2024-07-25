@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 from django.core.management.utils import get_random_secret_key
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', get_random_secret_key())
-
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', get_random_secret_key())
 DEBUG = True
 
 ALLOWED_HOSTS = []
@@ -44,11 +44,16 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'Profile',
     'Login',
     'Pushups',
 ]
 
 MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -90,8 +95,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
-
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators
 
@@ -123,9 +126,12 @@ USE_TZ = True
 STATIC_URL = '/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+]
 
-CORS_ALLOW_ALL_ORIGINS = True
-
+# Allow cookies to be sent with cross-origin requests
+CORS_ALLOW_CREDENTIALS = True
 # Firebase Admin SDK
 firebase_credentials = credentials.Certificate({
     "type": "service_account",
