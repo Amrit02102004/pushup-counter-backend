@@ -23,7 +23,7 @@ RUN pip install --upgrade pip \
 COPY spentbackend/ /app/
 
 # Run migrations
-RUN python manage.py migrate
+RUN python manage.py migrate || true
 
 # Expose the port the app runs on
 EXPOSE 8000
