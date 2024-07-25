@@ -27,7 +27,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 from django.core.management.utils import get_random_secret_key
 
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', get_random_secret_key())
-
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', get_random_secret_key())
 DEBUG = True
 
 ALLOWED_HOSTS = []
@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'Profile',
     'Login',
     'Pushups',
 ]

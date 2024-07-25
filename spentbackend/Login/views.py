@@ -9,11 +9,8 @@ from rest_framework.response import Response
 from rest_framework import status
 from firebase_admin import auth
 from .models import User
-from .serializers import UserSerializer
 from pymongo import MongoClient
 import os
-from .models import UserProfile
-from .serializers import UserProfileSerializer
 from django.core.exceptions import ObjectDoesNotExist
 # MongoDB setup
 mongo_uri = os.getenv("MONGO_URI")
@@ -55,43 +52,3 @@ def login(request):
         return Response({"detail": f"Invalid token error: {ve}"}, status=status.HTTP_401_UNAUTHORIZED)
     except Exception as e:
         return Response({"detail": f"Unexpected error during login: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)@api_view(['POST'])
-
-@api_view(['POST'])
-def profile_set(request):
-    auth_token = request.headers.get('Authorization', '').replace('Bearer ', '')
-    if not auth_token:
-        return Response({"message": "Authentication token is missing"}, status=status.HTTP_401_UNAUTHORIZED)
-
-    try:
-        token_data = jwt.decode(auth_token, JWT_SECRET_KEY, algorithms=["HS256"])
-        email = token_data.get('email')
-    except jwt.ExpiredSignatureError:
-        return Response({"message": "Token has expired"}, status=status.HTTP_401_UNAUTHORIZED)
-    except jwt.InvalidTokenError:
-        return Response({"message": "Invalid token"}, status=status.HTTP_401_UNAUTHORIZED)
-
-    if not email:
-        return Response({"message": "Email not found in token"}, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(email=email)
-    except ObjectDoesNotExist:
-        return Response({"message": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    profile_data = request.data
-    profile_data['dob'] = profile_data.get('dob').split('T')[0]  # Ensure date format is correct
-
-    try:
-        user_profile = UserProfile.objects.get(user=user)
-        serializer = UserProfileSerializer(user_profile, data=profile_data)
-    except UserProfile.DoesNotExist:
-        serializer = UserProfileSerializer(data=profile_data)
-        if serializer.is_valid():
-            serializer.save(user=user)
-            return Response({"message": "Profile set successfully"}, status=status.HTTP_200_OK)
-
-    if serializer.is_valid():
-        serializer.save()
-        return Response({"message": "Profile updated successfully"}, status=status.HTTP_200_OK)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
