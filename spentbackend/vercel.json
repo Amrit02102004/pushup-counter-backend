@@ -2,7 +2,7 @@
     "version": 2,
     "builds": [
       {
-        "src": "spentbackend/manage.py",
+        "src": "spentbackend/wsgi.py",
         "use": "@vercel/python",
         "config": {
           "maxLambdaSize": "50mb",
@@ -14,7 +14,7 @@
     "routes": [
       { "src": "/static/(.*)", "dest": "/spentbackend/static/$1" },
       { "src": "/media/(.*)", "dest": "/spentbackend/media/$1" },
-      { "src": "/(.*)", "dest": "/spentbackend/spentbackend/wsgi.py" }
+      { "src": "/(.*)", "dest": "spentbackend/wsgi.py" }
     ]
   }
   
