@@ -6,3 +6,5 @@ pyjwt==2.8.0
 gunicorn==21.2.0
 python-dotenv==1.0.0
 django-cors-headers==3.13.0
+cv2
+mediapipe
