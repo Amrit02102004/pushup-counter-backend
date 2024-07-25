@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
-from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
+from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
@@ -13,6 +13,7 @@ from firebase_admin import credentials, auth
 import cv2
 import numpy as np
 import mediapipe as mp
+import jwt
 
 # Load environment variables
 load_dotenv()
@@ -45,6 +46,9 @@ firebase_credentials = credentials.Certificate({
     "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL")
 })
 firebase_admin.initialize_app(firebase_credentials)
+
+# JWT secret key
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 
 app = FastAPI()
 
@@ -92,17 +96,19 @@ class User(BaseModel):
 
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
-        # Verify the Firebase ID token
-        decoded_token = auth.verify_id_token(token)
-        email = decoded_token.get('email')
+        # Decode the JWT token
+        payload = jwt.decode(token, JWT_SECRET_KEY, algorithms=["HS256"])
+        email = payload.get("email")
         if email is None:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         return email
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.post("/login")
-async def login(login_request: LoginRequest):
+async def login(login_request: LoginRequest, response: Response):
     try:
         # Verify the Firebase ID token
         decoded_token = auth.verify_id_token(login_request.id_token)
@@ -125,6 +131,13 @@ async def login(login_request: LoginRequest):
             {"$set": user.dict(by_alias=True)},
             upsert=True
         )
+        
+        # Create JWT token
+        token_data = {"email": user.email, "uid": user.userid}
+        token = jwt.encode(token_data, JWT_SECRET_KEY, algorithm="HS256")
+        print(JWT_SECRET_KEY)
+        # Set token in a cookie
+        response.set_cookie(key="auth_token", value=token, httponly=True, max_age=3600)
         
         return {"message": "Login successful", "userid": user.userid, "email": user.email}
 
