@@ -2,8 +2,8 @@
 FROM python:3.12-slim
 
 # Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 # Set the working directory in the container
 WORKDIR /app
@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY spentbackend/requirements.txt /app/
-RUN pip install --upgrade pip && pip install -r requirements.txt
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt
 
-# Copy the Django project
+# Copy the entire Django project
 COPY spentbackend/ /app/
 
 # Collect static files
@@ -31,4 +32,4 @@ RUN python manage.py migrate
 EXPOSE 8000
 
 # Start the application
-CMD gunicorn spentbackend.wsgi:application --bind 0.0.0.0:$PORT
+CMD ["gunicorn", "spentbackend.wsgi:application", "--bind", "0.0.0.0:8000"]
