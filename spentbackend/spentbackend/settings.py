@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'Profile',
     'Login',
-    'Pushups',
 ]
 
 MIDDLEWARE = [
