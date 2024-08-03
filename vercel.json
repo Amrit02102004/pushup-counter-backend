@@ -4,7 +4,7 @@
     {
       "src": "spentbackend/spentbackend/wsgi.py",
       "use": "@vercel/python",
-      "config": { "maxLambdaSize": "1024mb", "runtime": "python3.9" }
+      "config": { "maxLambdaSize": "150mb", "runtime": "python3.9" }
     }
   ],
   "routes": [
